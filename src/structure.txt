@@ -1,0 +1,31 @@
+src/
+├── App.vue                              # Layout: sidebar + main + transiciones de vista
+├── main.ts                              # Bootstrap de Vue (createApp + style.css)
+├── style.css                            # Tailwind v4 + tokens dark mode + scrollbar
+├── assets/                              # Imágenes estáticas (hero, vite, vue)
+├── components/
+│   ├── Sidebar.vue                      # Barra lateral fija + drawer responsive
+│   ├── icons/
+│   │   ├── IconChat.vue
+│   │   ├── IconDashboard.vue
+│   │   ├── IconMenu.vue
+│   │   └── IconUpload.vue
+│   └── views/
+│       ├── DashboardView.vue            # Kanban semáforo + KPIs + loading/error
+│       ├── SiniestroCard.vue            # Tarjeta por siniestro (consume Siniestro)
+│       ├── UploadView.vue               # Drag & drop CSV → uploadCsv()
+│       └── ChatView.vue                 # Chat → sendChatMessage()
+├── data/
+│   └── dashboard.json                   # Mock de Siniestro[] (alineado con la SQL)
+├── services/
+│   ├── siniestros.ts                    # fetchSiniestros + groupBySemaforo (mock)
+│   ├── upload.ts                        # uploadCsv (mock; endpoint comentado)
+│   └── chat.ts                          # sendChatMessage (mock; endpoint comentado)
+├── types/
+│   └── siniestro.ts                     # Tipos TS de fraud_ia.siniestros_scored_final
+├── resources/
+│   ├── create_siniestros_scored_final.sql  # DDL real de la tabla del backend
+│   └── plantilla.png                    # Referencia visual del kanban
+├── resources.txt                        # Prompt replicable del sistema
+├── endpoints.txt                        # Contrato y activación de los endpoints
+└── structure.txt                        # Este archivo
