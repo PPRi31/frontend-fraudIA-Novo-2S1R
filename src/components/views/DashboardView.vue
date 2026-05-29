@@ -54,24 +54,6 @@ const groups = computed<SiniestrosBySemaforo>(() =>
   groupBySemaforo(siniestros.value),
 )
 
-const totalReclamado = computed(() =>
-  siniestros.value.reduce((acc, s) => acc + (s.monto_reclamado ?? 0), 0),
-)
-
-const promedioScore = computed(() => {
-  const valid = siniestros.value.filter((s) => s.score_final != null)
-  if (!valid.length) return 0
-  const sum = valid.reduce((acc, s) => acc + (s.score_final ?? 0), 0)
-  return Math.round((sum / valid.length) * 10) / 10
-})
-
-const fmtMoneyShort = (v: number) => {
-  if (v >= 1_000_000_000) return `$${(v / 1_000_000_000).toFixed(1)} mM`
-  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)} M`
-  if (v >= 1_000) return `$${(v / 1_000).toFixed(1)} k`
-  return `$${v}`
-}
-
 async function load() {
   loading.value = true
   error.value = null

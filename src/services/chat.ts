@@ -6,6 +6,7 @@ export interface ChatMessage {
   id: number
   role: ChatRole
   text: string
+  html?: string
 }
 
 export interface ChatResponse {

@@ -95,7 +95,7 @@ function select(key: ViewKey) {
               U
             </div>
             <div class="leading-tight">
-              <p class="text-xs font-medium text-[var(--color-text)]">Usuario</p>
+              <p class="text-xs font-medium text-[var(--color-text)]">NOVO - 2S1R</p>
               <p class="text-[11px] text-[var(--color-text-muted)]">
                 Sesión activa
               </p>

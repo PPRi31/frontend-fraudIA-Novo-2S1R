@@ -1,13 +1,21 @@
 <script setup lang="ts">
 import { nextTick, ref } from 'vue'
 import { sendChatMessage, type ChatMessage } from '../../services/chat'
+import { sanitizeHtml } from '../../utils/sanitize'
+
+function looksLikeHtml(text: string) {
+  return /<\/?[a-z][\s\S]*>/i.test(text)
+}
+
+function buildBotMessage(id: number, text: string): ChatMessage {
+  const html = looksLikeHtml(text)
+    ? sanitizeHtml(text)
+    : sanitizeHtml(`<p>${text.replace(/\n/g, '<br>')}</p>`)
+  return { id, role: 'bot', text, html }
+}
 
 const messages = ref<ChatMessage[]>([
-  {
-    id: 1,
-    role: 'bot',
-    text: 'Hola, soy tu asistente virtual. ¿En qué puedo ayudarte?',
-  },
+  buildBotMessage(1, 'Hola, soy tu asistente virtual. ¿En qué puedo ayudarte?'),
 ])
 const input = ref('')
 const isTyping = ref(false)
@@ -35,14 +43,12 @@ async function send() {
   try {
     const { reply, session_id } = await sendChatMessage(text, sessionId.value)
     sessionId.value = session_id
-    messages.value.push({ id: nextId++, role: 'bot', text: reply })
+    messages.value.push(buildBotMessage(nextId++, reply))
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Error desconocido'
-    messages.value.push({
-      id: nextId++,
-      role: 'bot',
-      text: `No pude procesar tu mensaje: ${msg}`,
-    })
+    messages.value.push(
+      buildBotMessage(nextId++, `No pude procesar tu mensaje: ${msg}`),
+    )
   } finally {
     isTyping.value = false
     await scrollToBottom()
@@ -93,10 +99,13 @@ function onKeydown(e: KeyboardEvent) {
               :class="
                 m.role === 'user'
                   ? 'bg-[var(--color-accent)] text-white rounded-br-md'
-                  : 'bg-[var(--color-surface-2)] border border-[var(--color-border)] text-[var(--color-text)] rounded-bl-md'
+                  : 'bot-rich bg-[var(--color-surface-2)] border border-[var(--color-border)] text-[var(--color-text)] rounded-bl-md'
               "
             >
-              {{ m.text }}
+              <template v-if="m.role === 'bot'">
+                <div v-html="m.html ?? m.text" />
+              </template>
+              <template v-else>{{ m.text }}</template>
             </div>
             <div
               v-if="m.role === 'user'"
@@ -188,5 +197,145 @@ function onKeydown(e: KeyboardEvent) {
     transform: translateY(-4px);
     opacity: 1;
   }
+}
+
+.bot-rich :deep(> div > *:first-child) {
+  margin-top: 0;
+}
+.bot-rich :deep(> div > *:last-child) {
+  margin-bottom: 0;
+}
+
+.bot-rich :deep(p) {
+  margin: 0.5em 0;
+  line-height: 1.55;
+}
+
+.bot-rich :deep(strong),
+.bot-rich :deep(b) {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.bot-rich :deep(em),
+.bot-rich :deep(i) {
+  font-style: italic;
+}
+
+.bot-rich :deep(a) {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: rgba(139, 92, 246, 0.5);
+  transition: text-decoration-color 0.2s ease;
+}
+.bot-rich :deep(a:hover) {
+  text-decoration-color: var(--color-accent);
+}
+
+.bot-rich :deep(code) {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  padding: 0.1em 0.4em;
+  border-radius: 4px;
+  background: var(--color-surface-3);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.bot-rich :deep(pre) {
+  margin: 0.6em 0;
+  padding: 0.75em 0.9em;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 0.8em;
+  line-height: 1.5;
+}
+.bot-rich :deep(pre code) {
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: inherit;
+}
+
+.bot-rich :deep(ul),
+.bot-rich :deep(ol) {
+  margin: 0.5em 0;
+  padding-left: 1.25em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2em;
+}
+.bot-rich :deep(ul) {
+  list-style: disc;
+}
+.bot-rich :deep(ol) {
+  list-style: decimal;
+}
+.bot-rich :deep(li) {
+  line-height: 1.5;
+}
+.bot-rich :deep(li::marker) {
+  color: var(--color-text-muted);
+}
+
+.bot-rich :deep(h1),
+.bot-rich :deep(h2),
+.bot-rich :deep(h3),
+.bot-rich :deep(h4) {
+  margin: 0.8em 0 0.35em;
+  color: var(--color-text);
+  font-weight: 600;
+  line-height: 1.3;
+}
+.bot-rich :deep(h1) {
+  font-size: 1.15em;
+}
+.bot-rich :deep(h2) {
+  font-size: 1.05em;
+}
+.bot-rich :deep(h3),
+.bot-rich :deep(h4) {
+  font-size: 0.95em;
+}
+
+.bot-rich :deep(blockquote) {
+  margin: 0.5em 0;
+  padding: 0.4em 0.8em;
+  border-left: 2px solid var(--color-border-strong);
+  color: var(--color-text-dim);
+  background: var(--color-surface-3);
+  border-radius: 0 6px 6px 0;
+}
+
+.bot-rich :deep(hr) {
+  margin: 0.8em 0;
+  border: 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.bot-rich :deep(table) {
+  width: 100%;
+  margin: 0.6em 0;
+  border-collapse: collapse;
+  font-size: 0.85em;
+}
+.bot-rich :deep(th),
+.bot-rich :deep(td) {
+  padding: 0.4em 0.6em;
+  border: 1px solid var(--color-border);
+  text-align: left;
+}
+.bot-rich :deep(th) {
+  background: var(--color-surface-3);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.bot-rich :deep(small) {
+  font-size: 0.85em;
+  color: var(--color-text-muted);
 }
 </style>
