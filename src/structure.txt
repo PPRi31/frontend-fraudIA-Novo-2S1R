@@ -1,5 +1,5 @@
 src/
-├── App.vue                              # Layout: sidebar + main + transiciones de vista
+├── App.vue                              # Layout + router manual (/  y  /<id>)
 ├── main.ts                              # Bootstrap de Vue (createApp + style.css)
 ├── style.css                            # Tailwind v4 + tokens dark mode + scrollbar
 ├── assets/                              # Imágenes estáticas (hero, vite, vue)
@@ -12,20 +12,23 @@ src/
 │   │   └── IconUpload.vue
 │   └── views/
 │       ├── DashboardView.vue            # Kanban semáforo + KPIs + loading/error
-│       ├── SiniestroCard.vue            # Tarjeta por siniestro (consume Siniestro)
+│       ├── SiniestroCard.vue            # <a target="_blank"> a /<id_siniestro>
+│       ├── SiniestroDetailView.vue      # Detalle completo en ruta /<id>
 │       ├── UploadView.vue               # Drag & drop CSV → uploadCsv()
-│       └── ChatView.vue                 # Chat → sendChatMessage()
+│       └── ChatView.vue                 # Chat → sendChatMessage() + HTML sanitizado
 ├── data/
 │   └── dashboard.json                   # Mock de Siniestro[] (alineado con la SQL)
 ├── services/
-│   ├── siniestros.ts                    # fetchSiniestros + groupBySemaforo (mock)
-│   ├── upload.ts                        # uploadCsv (mock; endpoint comentado)
-│   └── chat.ts                          # sendChatMessage (mock; endpoint comentado)
+│   ├── api.ts                           # apiUrl + readError (helpers de fetch)
+│   ├── siniestros.ts                    # fetchSiniestros + fetchSiniestroById
+│   ├── upload.ts                        # uploadCsv
+│   └── chat.ts                          # sendChatMessage
 ├── types/
-│   └── siniestro.ts                     # Tipos TS de fraud_ia.siniestros_scored_final
+│   └── siniestro.ts                     # Tipos + REGLA_LABELS + ALERTA_LABELS
+├── utils/
+│   └── sanitize.ts                      # DOMPurify wrapper para v-html del chat
 ├── resources/
 │   ├── create_siniestros_scored_final.sql  # DDL real de la tabla del backend
 │   └── plantilla.png                    # Referencia visual del kanban
 ├── resources.txt                        # Prompt replicable del sistema
-├── endpoints.txt                        # Contrato y activación de los endpoints
 └── structure.txt                        # Este archivo

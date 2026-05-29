@@ -7,6 +7,16 @@ export async function fetchSiniestros(): Promise<Siniestro[]> {
   return (await res.json()) as Siniestro[]
 }
 
+// El backend solo expone GET /api/siniestros (lista completa).
+// Para el detalle pedimos la lista y filtramos por id_siniestro.
+// Cuando exista GET /api/siniestros/:id, sustituir por una sola petición.
+export async function fetchSiniestroById(id: number): Promise<Siniestro> {
+  const list = await fetchSiniestros()
+  const found = list.find((s) => s.id_siniestro === id)
+  if (!found) throw new Error(`Siniestro #${id} no encontrado`)
+  return found
+}
+
 export type SiniestrosBySemaforo = Record<SemaforoFinal, Siniestro[]>
 
 export function groupBySemaforo(items: Siniestro[]): SiniestrosBySemaforo {

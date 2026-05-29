@@ -1,10 +1,30 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import Sidebar, { type ViewKey } from './components/Sidebar.vue'
 import DashboardView from './components/views/DashboardView.vue'
 import UploadView from './components/views/UploadView.vue'
 import ChatView from './components/views/ChatView.vue'
+import SiniestroDetailView from './components/views/SiniestroDetailView.vue'
 import IconMenu from './components/icons/IconMenu.vue'
+
+type Route =
+  | { name: 'home' }
+  | { name: 'detail'; id: number }
+
+function parseRoute(pathname: string): Route {
+  const match = pathname.match(/^\/(\d+)\/?$/)
+  if (match) return { name: 'detail', id: Number(match[1]) }
+  return { name: 'home' }
+}
+
+const route = ref<Route>(parseRoute(window.location.pathname))
+
+function onPopState() {
+  route.value = parseRoute(window.location.pathname)
+}
+
+onMounted(() => window.addEventListener('popstate', onPopState))
+onUnmounted(() => window.removeEventListener('popstate', onPopState))
 
 const current = ref<ViewKey>('dashboard')
 const sidebarOpen = ref(false)
@@ -19,7 +39,16 @@ const currentTitle = computed(() => titles[current.value])
 </script>
 
 <template>
-  <div class="flex h-screen w-full bg-[var(--color-bg)] text-[var(--color-text)]">
+  <SiniestroDetailView
+    v-if="route.name === 'detail'"
+    :id="route.id"
+    class="min-h-screen overflow-y-auto bg-[var(--color-bg)] p-4 sm:p-6 lg:p-8"
+  />
+
+  <div
+    v-else
+    class="flex h-screen w-full bg-[var(--color-bg)] text-[var(--color-text)]"
+  >
     <Sidebar
       :current="current"
       :open="sidebarOpen"

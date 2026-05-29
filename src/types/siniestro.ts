@@ -96,3 +96,20 @@ export const REGLA_LABELS: Record<ReglaCritica, string> = {
   rf_11_proveedor_recurrente_monto_atipico: 'Proveedor recurrente atípico',
   rf_12_alta_frecuencia_y_borde_vigencia: 'Alta frecuencia + borde vigencia',
 }
+
+export const ALERTA_LABELS: Record<AlertaScore, string> = {
+  score_reclamo_vigencia: 'Reclamo cerca de vigencia',
+  score_demora_robo: 'Demora en reporte de robo',
+  score_freq_asegurado: 'Alta frecuencia del asegurado',
+  score_freq_vehiculo: 'Alta frecuencia del vehículo',
+  score_freq_conductor: 'Alta frecuencia del conductor',
+  score_rc_only: 'Cobertura solo RC',
+  score_proveedor: 'Proveedor recurrente',
+  score_docs_incompletos: 'Documentos incompletos',
+  score_docs_inconsistentes: 'Documentos inconsistentes',
+  score_dinamica_sospechosa: 'Dinámica sospechosa',
+  score_sin_tercero: 'Sin tercero involucrado',
+  score_reporte_tardio: 'Reporte tardío',
+  score_monto_suma_asegurada: 'Monto cerca de suma asegurada',
+  score_narrativas_similares: 'Narrativas similares a otras',
+}

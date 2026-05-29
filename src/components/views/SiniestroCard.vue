@@ -65,8 +65,12 @@ const scoreFinal = computed(() =>
 </script>
 
 <template>
-  <article
-    class="group cursor-default rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3.5 transition-all duration-200 hover:-translate-y-px hover:bg-[var(--color-surface-3)] hover:shadow-lg hover:shadow-black/30"
+  <a
+    :href="`/${siniestro.id_siniestro}`"
+    target="_blank"
+    rel="noopener noreferrer"
+    :aria-label="`Ver detalle del siniestro #${siniestro.id_siniestro}`"
+    class="group block cursor-pointer rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3.5 text-left no-underline transition-all duration-200 hover:-translate-y-px hover:bg-[var(--color-surface-3)] hover:shadow-lg hover:shadow-black/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/60"
     :class="tokens.border"
   >
     <header class="flex items-start justify-between gap-3">
@@ -205,5 +209,5 @@ const scoreFinal = computed(() =>
         </span>
       </div>
     </footer>
-  </article>
+  </a>
 </template>

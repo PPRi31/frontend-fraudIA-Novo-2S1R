@@ -3,14 +3,24 @@ import { nextTick, ref } from 'vue'
 import { sendChatMessage, type ChatMessage } from '../../services/chat'
 import { sanitizeHtml } from '../../utils/sanitize'
 
+function stripMarkdownFence(text: string) {
+  const trimmed = text.trim()
+  const fenceMatch = trimmed.match(
+    /^`{3,}(?:[a-zA-Z0-9_-]+)?\s*\n?([\s\S]*?)\n?`{3,}\s*$/,
+  )
+  if (fenceMatch) return fenceMatch[1].trim()
+  return text
+}
+
 function looksLikeHtml(text: string) {
   return /<\/?[a-z][\s\S]*>/i.test(text)
 }
 
 function buildBotMessage(id: number, text: string): ChatMessage {
-  const html = looksLikeHtml(text)
-    ? sanitizeHtml(text)
-    : sanitizeHtml(`<p>${text.replace(/\n/g, '<br>')}</p>`)
+  const cleaned = stripMarkdownFence(text)
+  const html = looksLikeHtml(cleaned)
+    ? sanitizeHtml(cleaned)
+    : sanitizeHtml(`<p>${cleaned.replace(/\n/g, '<br>')}</p>`)
   return { id, role: 'bot', text, html }
 }
 

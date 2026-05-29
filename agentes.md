@@ -43,7 +43,11 @@ El frontend agrupa siniestros por `semaforo_final` en un tablero kanban.
 - **Vite 8** + plugin oficial `@vitejs/plugin-vue`.
 - **Tailwind CSS v4** vía `@tailwindcss/vite` (no hay `tailwind.config.js`,
   el theme se define en `src/style.css` con `@theme`).
-- Sin Vue Router ni Pinia: navegación por estado local en `App.vue` (3 vistas).
+- **DOMPurify** para sanitizar el HTML del bot del chat (`src/utils/sanitize.ts`).
+- Sin Vue Router ni Pinia. La navegación entre las 3 vistas internas se hace
+  con un `ref` en `App.vue`. Para la página de detalle existe un router manual
+  (window.location + `popstate`) que matchea `/<id>` y monta
+  `SiniestroDetailView`.
 - Sin librerías de iconos: SVG inline en `src/components/icons/`.
 
 ### Comandos
@@ -61,10 +65,21 @@ npm run preview    # preview del build
 
 ### Layout
 
-`App.vue` mantiene `current: ViewKey` (`'dashboard' | 'upload' | 'chat'`) y un
-`sidebarOpen` para el drawer móvil. El `<main>` hace `transition` `view`
-(fade + translate) entre vistas. La sidebar es `sticky` en desktop (`lg`+) y
-drawer absoluto con backdrop blur en mobile.
+`App.vue` cumple dos funciones:
+
+1. **Router manual.** Lee `window.location.pathname`. Si hace match con
+   `^/(\d+)/?$` monta `SiniestroDetailView` con ese `id` como prop. Cualquier
+   otra ruta (incluyendo `/`) renderiza el layout principal con sidebar.
+   Hay un listener de `popstate` para soportar back/forward del navegador.
+2. **Layout principal.** Mantiene `current: ViewKey`
+   (`'dashboard' | 'upload' | 'chat'`) y `sidebarOpen` para el drawer móvil. El
+   `<main>` hace `transition` `view` (fade + translate) entre vistas. La
+   sidebar es `sticky` en desktop (`lg`+) y drawer con backdrop blur en mobile.
+
+> Si en el futuro se agregan más rutas (por ejemplo `/poliza/<id>`,
+> `/asegurado/<id>`), el router manual sigue funcionando: solo añadir más
+> ramas a `parseRoute()` en `App.vue`. Si llegan a ser muchas, ahí sí
+> considerar Vue Router.
 
 ### Vistas
 
@@ -76,7 +91,16 @@ drawer absoluto con backdrop blur en mobile.
 - **`SiniestroCard.vue`** — Recibe `Siniestro` y muestra: id, ramo, cobertura,
   sucursal, badge de `score_final`, `monto_reclamado` (formato COP),
   `probabilidad_ml` (%), `explicabilidad` truncada a 2 líneas, footer con
-  fecha, conteo de reglas críticas y badges de docs/frecuencia.
+  fecha, conteo de reglas críticas y badges de docs/frecuencia. **Es un
+  `<a target="_blank">`** que apunta a `/<id_siniestro>`, así click,
+  middle-click y Cmd-click abren el detalle en una pestaña nueva.
+- **`SiniestroDetailView.vue`** — Página `/<id>`. Llama
+  `fetchSiniestroById(id)` en `onMounted` y al cambiar `id`. Muestra todo el
+  registro en secciones: Identificación, Fechas, Montos, Ubicación,
+  Documentación, Frecuencias 18m, Análisis de riesgo (semáforos, prob/score
+  ML, similitud, IDs similares clickables), Reglas críticas activadas
+  (`REGLA_LABELS`), Alertas de score (`ALERTA_LABELS`), Descripción y
+  Explicabilidad. Tiene botón "Volver" (history.back con fallback a `/`).
 - **`UploadView.vue`** — Drag & drop estilizado para `.csv`, validación por
   extensión/MIME y delegación de la subida a `uploadCsv()`. Estado
   `isUploading` que cambia el copy del dropzone a "Subiendo archivo…" y lo
@@ -90,27 +114,31 @@ drawer absoluto con backdrop blur en mobile.
 ### Capa de datos
 
 - **`src/types/siniestro.ts`** — Refleja 1:1 la SQL: `Siniestro`,
-  `SemaforoFinal`, `ReglaCritica`, `AlertaScore`, `REGLA_LABELS`. **Si la SQL
-  cambia, este archivo debe actualizarse primero.**
-- **`src/services/siniestros.ts`** — `fetchSiniestros(): Promise<Siniestro[]>`
-  hoy lee `data/dashboard.json` con `setTimeout(350)`. La llamada real a
-  `fetch('/api/siniestros')` está comentada dentro de la función.
-  `groupBySemaforo()` ordena por `score_final` desc.
-- **`src/services/upload.ts`** — `uploadCsv(file): Promise<UploadResult>`
-  simula un POST con `setTimeout(500)` y retorna `{ ok, fileName, size }`. La
-  llamada real (`POST /api/upload/csv` con `FormData`) está comentada dentro
-  de la función.
-- **`src/services/chat.ts`** — `sendChatMessage(message): Promise<ChatResponse>`
-  simula la respuesta con `setTimeout(800)` y devuelve un `reply` fijo. La
-  llamada real (`POST /api/chat` con JSON) está comentada dentro de la
-  función. Exporta también `ChatMessage` y `ChatRole` que usa la vista.
-- **`src/data/dashboard.json`** — Array de `Siniestro` con datos sintéticos que
-  cumplen las constraints de la tabla.
+  `SemaforoFinal`, `ReglaCritica`, `AlertaScore`, `REGLA_LABELS`,
+  `ALERTA_LABELS`. **Si la SQL cambia, este archivo debe actualizarse primero.**
+- **`src/services/api.ts`** — Helpers compartidos: `apiUrl(path)` (resuelve
+  con `VITE_API_URL` o ruta relativa) y `readError(res)` para extraer mensaje
+  legible de la respuesta de error.
+- **`src/services/siniestros.ts`** —
+  - `fetchSiniestros(): Promise<Siniestro[]>` → `GET /api/siniestros`.
+  - `fetchSiniestroById(id): Promise<Siniestro>` → llama `fetchSiniestros()`
+    y filtra por `id_siniestro`. Cuando el backend exponga
+    `GET /api/siniestros/:id`, sustituir por una sola petición directa.
+  - `groupBySemaforo()` ordena por `score_final` desc.
+- **`src/services/upload.ts`** — `uploadCsv(file): Promise<UploadResult>` →
+  `POST /api/upload/csv` con `FormData`.
+- **`src/services/chat.ts`** — `sendChatMessage(message, sessionId)` →
+  `POST /api/chat` con JSON. Exporta también `ChatMessage`, `ChatRole`,
+  `ChatResponse`.
+- **`src/utils/sanitize.ts`** — `sanitizeHtml()` con DOMPurify, whitelist de
+  tags y atributos seguros, hook que fuerza `target="_blank"` +
+  `rel="noopener noreferrer"` en `<a>`.
+- **`src/data/dashboard.json`** — Array de `Siniestro` con datos sintéticos
+  para fixtures locales.
 
 > **Patrón:** toda llamada al backend vive en `src/services/*.ts`. Las vistas
-> nunca hacen `fetch` directo. Para activar un endpoint real, descomentar el
-> bloque marcado en cada servicio y borrar el `setTimeout` simulado. Ver
-> `src/endpoints.txt` para el contrato detallado de cada uno.
+> nunca hacen `fetch` directo. Si la API cambia el shape, mapear el resultado
+> dentro del servicio, no en la vista.
 
 ---
 
@@ -146,79 +174,88 @@ drawer absoluto con backdrop blur en mobile.
 
 ### No hacer
 
-- No introducir Vue Router / Pinia para flujos triviales; un `ref` basta.
+- No introducir Vue Router / Pinia mientras el router manual cubra los casos.
 - No agregar `tailwind.config.js`; v4 usa `@theme` en CSS.
 - No mezclar light/dark; el sistema es dark only.
 - No comentar código con narraciones obvias.
 - No crear README extra ni archivos de documentación a menos que se pidan
   explícitamente.
+- No usar `v-html` con texto sin pasar por `sanitizeHtml()`.
 
 ---
 
-## 6. Cómo conectar el backend real
+## 6. Endpoints del backend
 
-Hay **tres** endpoints, todos aislados en `src/services/*.ts`. La llamada
-`fetch()` está comentada dentro de cada función; activarla es el único cambio
-necesario.
+Todos los endpoints viven aislados en `src/services/*.ts`. Las vistas nunca
+llaman `fetch` directo. Las rutas se resuelven con `apiUrl(path)` que respeta
+`VITE_API_URL` (si está) o usa rutas relativas.
 
-### 6.1 Siniestros — `src/services/siniestros.ts`
+| Vista                    | Servicio                  | Función                  | Endpoint              | Método |
+| ------------------------ | ------------------------- | ------------------------ | --------------------- | ------ |
+| Dashboard                | `services/siniestros.ts`  | `fetchSiniestros()`      | `/api/siniestros`     | GET    |
+| Detalle (`/<id>`)        | `services/siniestros.ts`  | `fetchSiniestroById(id)` | `/api/siniestros` *   | GET    |
+| Subir archivos           | `services/upload.ts`      | `uploadCsv(file)`        | `/api/upload/csv`     | POST   |
+| Chat                     | `services/chat.ts`        | `sendChatMessage(msg)`   | `/api/chat`           | POST   |
 
-```ts
-export async function fetchSiniestros(): Promise<Siniestro[]> {
-  const res = await fetch('/api/siniestros')
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return (await res.json()) as Siniestro[]
-}
-```
+\* Hoy el detalle reusa `GET /api/siniestros` y filtra en cliente. Cuando el
+backend exponga `GET /api/siniestros/:id`, simplificar `fetchSiniestroById` a
+una sola petición.
 
-### 6.2 Subida CSV — `src/services/upload.ts`
+### 6.1 Detalle por id
 
-```ts
-export async function uploadCsv(file: File): Promise<UploadResult> {
-  const form = new FormData()
-  form.append('file', file)
-  const res = await fetch('/api/upload/csv', { method: 'POST', body: form })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return (await res.json()) as UploadResult
-}
-```
-
-> No setear `Content-Type` manualmente: el navegador agrega el `boundary`.
-
-### 6.3 Chat — `src/services/chat.ts`
+`fetchSiniestroById(id)` llama directamente a `fetchSiniestros()` y busca el
+registro con `id_siniestro === id`. Esto evita duplicar contratos con el
+backend mientras solo exista la lista. Cuando se agregue el endpoint
+individual, reemplazar el cuerpo por:
 
 ```ts
-export async function sendChatMessage(message: string): Promise<ChatResponse> {
-  const res = await fetch('/api/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message }),
-  })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return (await res.json()) as ChatResponse
-}
+const res = await fetch(apiUrl(`/api/siniestros/${id}`))
+if (!res.ok) throw new Error(await readError(res))
+return (await res.json()) as Siniestro
 ```
 
-> Si el endpoint hace streaming (SSE), reescribir consumiendo `ReadableStream`
-> y actualizando el último mensaje del bot token a token; la firma de la
-> función puede cambiar a `AsyncIterable<string>`.
+### 6.2 Notas
 
-### 6.4 Configuración compartida
-
-- Las rutas son relativas (`/api/...`) asumiendo mismo origen o proxy de Vite.
-  Si el backend vive en otro dominio, exponer `VITE_API_URL` en `.env` y
-  prefijar cada ruta con `import.meta.env.VITE_API_URL`.
-- Para auth, agregar `headers: { Authorization: ... }` (idealmente en un
-  `httpClient` compartido si se vuelve repetitivo).
-- Detalle por endpoint (método, body, respuesta esperada, notas) en
-  **`src/endpoints.txt`**.
+- **Subida CSV** — no setear `Content-Type` manualmente: el navegador agrega
+  el `boundary` correcto.
+- **Chat** — si el backend hace streaming (SSE), reescribir consumiendo
+  `ReadableStream` y actualizando el último mensaje del bot token a token; la
+  firma puede cambiar a `AsyncIterable<string>`. La respuesta puede traer HTML
+  envuelto en fences Markdown (` ```html ... ``` `); `ChatView` los limpia
+  antes de sanitizar.
+- **Configuración compartida** — `VITE_API_URL` en `.env` + auth en un
+  `httpClient` compartido si crece la cantidad de endpoints.
 
 ---
 
-## 7. Archivos clave de referencia
+## 7. Routing manual
+
+`App.vue` implementa un mini-router sin dependencias:
+
+```ts
+function parseRoute(pathname: string): Route {
+  const match = pathname.match(/^\/(\d+)\/?$/)
+  if (match) return { name: 'detail', id: Number(match[1]) }
+  return { name: 'home' }
+}
+```
+
+Convenciones:
+
+- Las rutas dinámicas se abren con `<a target="_blank">` (no `window.open`)
+  para conservar el comportamiento estándar de los navegadores: middle-click
+  abre en pestaña, Cmd-click en pestaña en background, click derecho funciona,
+  Enter sobre el link funciona.
+- Los IDs en URLs son numéricos para que `parseRoute` los detecte. Si se
+  introducen IDs no numéricos, hay que cambiar el regex.
+- El servidor que sirva la app en producción debe hacer fallback a
+  `index.html` para cualquier ruta no estática (Vite ya lo hace en dev).
+
+---
+
+## 8. Archivos clave de referencia
 
 - `src/resources.txt` — prompt replicable que describe el sistema completo.
-- `src/endpoints.txt` — contrato y guía de los 3 endpoints del backend.
 - `src/structure.txt` — árbol vivo de `src/`.
 - `src/resources/create_siniestros_scored_final.sql` — fuente de verdad del modelo de datos.
 - `src/resources/plantilla.png` — referencia visual del kanban.
