@@ -153,34 +153,6 @@ onMounted(load)
         <p
           class="text-[10px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]"
         >
-          Monto reclamado
-        </p>
-        <p
-          class="mt-1 text-lg font-semibold tabular-nums text-[var(--color-text)]"
-        >
-          {{ fmtMoneyShort(totalReclamado) }}
-        </p>
-      </div>
-      <div
-        class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
-      >
-        <p
-          class="text-[10px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]"
-        >
-          Score promedio
-        </p>
-        <p
-          class="mt-1 text-lg font-semibold tabular-nums text-[var(--color-text)]"
-        >
-          {{ promedioScore }}
-        </p>
-      </div>
-      <div
-        class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
-      >
-        <p
-          class="text-[10px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]"
-        >
           Críticos (Rojo)
         </p>
         <p

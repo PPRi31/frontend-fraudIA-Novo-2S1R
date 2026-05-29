@@ -1,13 +1,10 @@
 import type { Siniestro, SemaforoFinal } from '../types/siniestro'
-import mockData from '../data/dashboard.json'
+import { apiUrl, readError } from './api'
 
-// Cuando el backend esté listo, reemplazar el cuerpo por:
-//   const res = await fetch('/api/siniestros')
-//   if (!res.ok) throw new Error(`HTTP ${res.status}`)
-//   return (await res.json()) as Siniestro[]
 export async function fetchSiniestros(): Promise<Siniestro[]> {
-  await new Promise((resolve) => setTimeout(resolve, 350))
-  return mockData as Siniestro[]
+  const res = await fetch(apiUrl('/api/siniestros'))
+  if (!res.ok) throw new Error(await readError(res))
+  return (await res.json()) as Siniestro[]
 }
 
 export type SiniestrosBySemaforo = Record<SemaforoFinal, Siniestro[]>

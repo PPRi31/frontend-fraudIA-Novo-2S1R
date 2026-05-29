@@ -1,12 +1,24 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import IconUpload from '../icons/IconUpload.vue'
-import { uploadCsv } from '../../services/upload'
+import {
+  REQUIRED_UPLOAD_FILES,
+  uploadFraudCsvSet,
+  type RequiredUploadField,
+  type UploadFilesMap,
+  type UploadResult,
+} from '../../services/upload'
 
 const isDragging = ref(false)
 const isUploading = ref(false)
-const fileName = ref<string | null>(null)
 const inputRef = ref<HTMLInputElement | null>(null)
+const selectedFiles = ref<Partial<Record<RequiredUploadField, File>>>({})
+const lastResult = ref<UploadResult | null>(null)
+
+const selectedCount = computed(() => Object.keys(selectedFiles.value).length)
+const allSelected = computed(
+  () => selectedCount.value === REQUIRED_UPLOAD_FILES.length,
+)
 
 function isCsv(file: File) {
   return (
@@ -16,36 +28,63 @@ function isCsv(file: File) {
   )
 }
 
-async function handleFiles(files: FileList | null) {
-  if (!files || files.length === 0) return
-  const file = files[0]
-  if (!isCsv(file)) {
-    alert('Solo se permiten archivos .csv')
-    return
+function identifyField(file: File): RequiredUploadField | null {
+  const lower = file.name.toLowerCase()
+  const match = REQUIRED_UPLOAD_FILES.find((item) => {
+    const field = item.field.toLowerCase()
+    return (
+      lower === item.filename.toLowerCase() ||
+      lower.startsWith(`${field}.`) ||
+      lower.startsWith(`${field}_`) ||
+      lower.startsWith(`${field}-`)
+    )
+  })
+  return match?.field ?? null
+}
+
+function handleFiles(files: FileList | null) {
+  if (!files || files.length === 0 || isUploading.value) return
+
+  const rejected: string[] = []
+  const unknown: string[] = []
+  const next = { ...selectedFiles.value }
+
+  for (const file of Array.from(files)) {
+    if (!isCsv(file)) {
+      rejected.push(file.name)
+      continue
+    }
+
+    const field = identifyField(file)
+    if (!field) {
+      unknown.push(file.name)
+      continue
+    }
+
+    next[field] = file
   }
-  isUploading.value = true
-  try {
-    const result = await uploadCsv(file)
-    fileName.value = result.fileName
-    alert('Archivo subido correctamente')
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Error desconocido'
-    alert(`No se pudo subir el archivo: ${msg}`)
-  } finally {
-    isUploading.value = false
+
+  selectedFiles.value = next
+  lastResult.value = null
+
+  if (rejected.length) alert(`Solo se permiten CSV: ${rejected.join(', ')}`)
+  if (unknown.length) {
+    alert(
+      `No pude asociar estos archivos al pipeline: ${unknown.join(', ')}. Usa los nombres requeridos o selecciona los CSV originales.`,
+    )
   }
 }
 
 function onChange(e: Event) {
   const input = e.target as HTMLInputElement
-  void handleFiles(input.files)
+  handleFiles(input.files)
   input.value = ''
 }
 
 function onDrop(e: DragEvent) {
   e.preventDefault()
   isDragging.value = false
-  void handleFiles(e.dataTransfer?.files ?? null)
+  handleFiles(e.dataTransfer?.files ?? null)
 }
 
 function onDragOver(e: DragEvent) {
@@ -61,6 +100,46 @@ function openPicker() {
   if (isUploading.value) return
   inputRef.value?.click()
 }
+
+function removeFile(field: RequiredUploadField) {
+  const next = { ...selectedFiles.value }
+  delete next[field]
+  selectedFiles.value = next
+  lastResult.value = null
+}
+
+function clearFiles() {
+  selectedFiles.value = {}
+  lastResult.value = null
+}
+
+function buildFilesMap(): UploadFilesMap {
+  const missing = REQUIRED_UPLOAD_FILES.filter(
+    (item) => !selectedFiles.value[item.field],
+  )
+  if (missing.length) {
+    throw new Error(
+      `Faltan archivos: ${missing.map((item) => item.filename).join(', ')}`,
+    )
+  }
+  return selectedFiles.value as UploadFilesMap
+}
+
+async function processFiles() {
+  if (isUploading.value) return
+
+  isUploading.value = true
+  try {
+    const result = await uploadFraudCsvSet(buildFilesMap(), true)
+    lastResult.value = result
+    alert(`Procesamiento completado: ${result.processed_rows} registros.`)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Error desconocido'
+    alert(`No se pudieron procesar los archivos: ${msg}`)
+  } finally {
+    isUploading.value = false
+  }
+}
 </script>
 
 <template>
@@ -69,18 +148,14 @@ function openPicker() {
       <h1 class="text-2xl font-semibold tracking-tight text-[var(--color-text)]">
         Subir archivos
       </h1>
-      <p class="text-sm text-[var(--color-text-dim)]">
-        Selecciona o arrastra un archivo
-        <code
-          class="rounded bg-[var(--color-surface-3)] px-1.5 py-0.5 text-[12px] text-[var(--color-text)]"
-          >.csv</code
-        >
-        para procesarlo.
+      <p class="max-w-3xl text-sm text-[var(--color-text-dim)]">
+        Selecciona o arrastra los 6 CSV requeridos por el pipeline. Se procesarán
+        con reglas, modelo ML y explicabilidad; luego se guardarán en PostgreSQL.
       </p>
     </header>
 
-    <div class="flex flex-1 items-start justify-center">
-      <div class="w-full max-w-2xl">
+    <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div>
         <div
           @click="openPicker"
           @keydown.enter.prevent="openPicker"
@@ -90,12 +165,10 @@ function openPicker() {
           @dragleave="onDragLeave"
           tabindex="0"
           role="button"
-          aria-label="Subir archivo CSV"
-          class="group relative flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed px-6 py-14 text-center transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/60"
+          aria-label="Subir archivos CSV"
+          class="group relative flex min-h-64 flex-col items-center justify-center gap-4 rounded-2xl border border-dashed px-6 py-14 text-center transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/60"
           :class="[
-            isUploading
-              ? 'cursor-progress opacity-80'
-              : 'cursor-pointer',
+            isUploading ? 'cursor-progress opacity-80' : 'cursor-pointer',
             isDragging
               ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/8 scale-[1.01]'
               : 'border-[var(--color-border-strong)] bg-[var(--color-surface)] hover:border-[var(--color-accent)]/60 hover:bg-[var(--color-surface-2)]',
@@ -108,20 +181,15 @@ function openPicker() {
             <IconUpload class="h-6 w-6" />
           </div>
           <div class="flex flex-col gap-1">
-            <p
-              v-if="isUploading"
-              class="text-sm font-medium text-[var(--color-text)]"
-            >
-              Subiendo archivo…
+            <p v-if="isUploading" class="text-sm font-medium text-[var(--color-text)]">
+              Procesando archivos…
             </p>
             <p v-else class="text-sm font-medium text-[var(--color-text)]">
-              Arrastra tu archivo aquí o
-              <span class="text-[var(--color-accent)]"
-                >haz clic para seleccionar</span
-              >
+              Arrastra los CSV aquí o
+              <span class="text-[var(--color-accent)]">haz clic para seleccionar</span>
             </p>
             <p class="text-xs text-[var(--color-text-muted)]">
-              Solo archivos CSV · Máximo 10MB
+              {{ selectedCount }}/{{ REQUIRED_UPLOAD_FILES.length }} archivos listos · solo CSV
             </p>
           </div>
 
@@ -129,52 +197,105 @@ function openPicker() {
             ref="inputRef"
             type="file"
             accept=".csv,text/csv"
+            multiple
             class="sr-only"
             @change="onChange"
           />
         </div>
 
+        <div class="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            :disabled="!allSelected || isUploading"
+            class="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+            @click="processFiles"
+          >
+            {{ isUploading ? 'Procesando…' : 'Procesar y guardar' }}
+          </button>
+          <button
+            type="button"
+            :disabled="selectedCount === 0 || isUploading"
+            class="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-4 py-2 text-sm font-medium text-[var(--color-text-dim)] transition-colors hover:text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-50"
+            @click="clearFiles"
+          >
+            Limpiar selección
+          </button>
+        </div>
+
         <transition name="fade">
           <div
-            v-if="fileName"
-            class="fade-up mt-4 flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-4 py-3"
+            v-if="lastResult"
+            class="fade-up mt-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-4 py-3 text-sm text-[var(--color-text-dim)]"
           >
-            <div class="flex items-center gap-3">
-              <div
-                class="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--color-green-bg)] text-[var(--color-green-soft)]"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="h-4 w-4"
-                >
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              </div>
-              <div class="leading-tight">
-                <p class="text-sm font-medium text-[var(--color-text)]">
-                  {{ fileName }}
-                </p>
-                <p class="text-xs text-[var(--color-text-muted)]">
-                  Subido correctamente
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              class="rounded-md px-2 py-1 text-xs text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text)]"
-              @click="fileName = null"
-            >
-              Quitar
-            </button>
+            <p class="font-medium text-[var(--color-text)]">
+              Procesamiento completado
+            </p>
+            <p class="mt-1">
+              {{ lastResult.processed_rows }} registros procesados ·
+              {{ lastResult.inserted_rows ?? 0 }} guardados/actualizados.
+            </p>
+            <p class="mt-1 text-xs text-[var(--color-text-muted)]">
+              Rojo: {{ lastResult.summary.semaforo_final.Rojo ?? 0 }} · Amarillo:
+              {{ lastResult.summary.semaforo_final.Amarillo ?? 0 }} · Verde:
+              {{ lastResult.summary.semaforo_final.Verde ?? 0 }}
+            </p>
           </div>
         </transition>
       </div>
+
+      <aside
+        class="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
+      >
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <h2 class="text-sm font-semibold text-[var(--color-text)]">
+              Archivos requeridos
+            </h2>
+            <p class="mt-1 text-xs text-[var(--color-text-muted)]">
+              Puedes seleccionarlos en una sola acción o agregarlos uno por uno.
+            </p>
+          </div>
+          <span
+            class="rounded-full bg-[var(--color-surface-3)] px-2 py-0.5 text-xs font-medium text-[var(--color-text-dim)]"
+          >
+            {{ selectedCount }}/6
+          </span>
+        </div>
+
+        <ul class="mt-4 flex flex-col gap-2.5">
+          <li
+            v-for="item in REQUIRED_UPLOAD_FILES"
+            :key="item.field"
+            class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2.5"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-[var(--color-text)]">
+                  {{ item.label }}
+                </p>
+                <p class="mt-0.5 truncate text-xs text-[var(--color-text-muted)]">
+                  {{ selectedFiles[item.field]?.name ?? item.filename }}
+                </p>
+              </div>
+              <button
+                v-if="selectedFiles[item.field]"
+                type="button"
+                class="rounded-md px-2 py-1 text-xs text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text)]"
+                :disabled="isUploading"
+                @click="removeFile(item.field)"
+              >
+                Quitar
+              </button>
+              <span
+                v-else
+                class="rounded-md bg-[var(--color-surface-3)] px-2 py-1 text-xs text-[var(--color-text-muted)]"
+              >
+                Pendiente
+              </span>
+            </div>
+          </li>
+        </ul>
+      </aside>
     </div>
   </section>
 </template>

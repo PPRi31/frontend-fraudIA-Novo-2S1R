@@ -11,6 +11,7 @@ const messages = ref<ChatMessage[]>([
 ])
 const input = ref('')
 const isTyping = ref(false)
+const sessionId = ref<string | null>(null)
 const listRef = ref<HTMLElement | null>(null)
 
 let nextId = 2
@@ -32,7 +33,8 @@ async function send() {
 
   isTyping.value = true
   try {
-    const { reply } = await sendChatMessage(text)
+    const { reply, session_id } = await sendChatMessage(text, sessionId.value)
+    sessionId.value = session_id
     messages.value.push({ id: nextId++, role: 'bot', text: reply })
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Error desconocido'

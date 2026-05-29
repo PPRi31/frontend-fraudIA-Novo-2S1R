@@ -1,3 +1,5 @@
+import { apiUrl, readError } from './api'
+
 export type ChatRole = 'user' | 'bot'
 
 export interface ChatMessage {
@@ -8,29 +10,21 @@ export interface ChatMessage {
 
 export interface ChatResponse {
   reply: string
+  session_id: string
 }
 
-const FALLBACK_REPLY =
-  'Hola, soy tu asistente virtual. ¿En qué puedo ayudarte?'
+export async function sendChatMessage(
+  message: string,
+  sessionId?: string | null,
+): Promise<ChatResponse> {
+  const payload: { message: string; session_id?: string } = { message }
+  if (sessionId) payload.session_id = sessionId
 
-// Cuando el backend esté listo, reemplazar el cuerpo por:
-//
-//   const res = await fetch('/api/chat', {
-//     method: 'POST',
-//     headers: { 'Content-Type': 'application/json' },
-//     body: JSON.stringify({ message }),
-//   })
-//   if (!res.ok) throw new Error(`HTTP ${res.status}`)
-//   return (await res.json()) as ChatResponse
-//
-// Notas:
-// - Si el backend mantiene contexto de conversación, enviar también el
-//   historial: `body: JSON.stringify({ message, history })`.
-// - Si el endpoint hace streaming (SSE / chunked), usar `ReadableStream` y
-//   actualizar `messages` token por token en lugar de retornar `reply` completo.
-// - Si requiere auth, agregar `headers: { Authorization: ... }`.
-export async function sendChatMessage(message: string): Promise<ChatResponse> {
-  await new Promise((resolve) => setTimeout(resolve, 800))
-  void message
-  return { reply: FALLBACK_REPLY }
+  const res = await fetch(apiUrl('/api/chat'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) throw new Error(await readError(res))
+  return (await res.json()) as ChatResponse
 }
